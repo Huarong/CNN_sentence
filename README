@@ -21,9 +21,9 @@ Instructions:
 
 1. with all the files in folder, run
 
-python process_data.py -path
+python process_data.py path
 
-where -path points to the word2vec binary file (i.e. GoogleNews-vectors-negative300.bin file). 
+where path points to the word2vec binary file (i.e. GoogleNews-vectors-negative300.bin file). 
 Downloadable at https://code.google.com/p/word2vec/
 This will create a pickle object called "mr.p" in the same folder, which contains the dataset in the right format.
 

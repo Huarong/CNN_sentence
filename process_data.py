@@ -3,61 +3,58 @@
 
 
 import codecs
-import numpy as np
 import cPickle
 from collections import defaultdict
-import sys, re
+import sys
+import re
+
+import numpy as np
 import pandas as pd
 
-def build_data_cv(data_folder, cv=10, clean_string=True):
+
+def build_data_cv(train_path, cv=10, clean_string=False):
     """
     Loads data and split into 10 folds.
+    split range is from 0 to cv-1
+    : return: revs, vocab
+    revs is a list of data dicts. One line corresponds one dict.
+    vocab is a dict. The key is word and value is word count.
     """
     revs = []
-    pos_file = data_folder[0]
-    neg_file = data_folder[1]
     vocab = defaultdict(float)
-    with codecs.open(pos_file, "rb", encoding='gb18030') as f:
-        for line in f:
-            rev = []
-            rev.append(line.strip())
+    with codecs.open(train_path, "rb", encoding='gb18030') as f:
+        for i, line in enumerate(f):
+            tokens = line.strip('\n\r').split('\t')
+            if len(tokens) != 2:
+                sys.stderr.write('data file in line %s should have exactly two columns.' % (i + 1))
+                continue
+            label, sent = tokens
             if clean_string:
-                orig_rev = clean_str(" ".join(rev))
+                orig_rev = clean_str(sent)
             else:
-                orig_rev = " ".join(rev).lower()
+                orig_rev = sent.lower()
             words = set(orig_rev.split())
             for word in words:
                 vocab[word] += 1
-            datum  = {"y":1,
-                      "text": orig_rev,
-                      "num_words": len(orig_rev.split()),
-                      "split": np.random.randint(0,cv)}
-            revs.append(datum)
-    with codecs.open(neg_file, "rb", encoding='gb18030') as f:
-        for line in f:
-            rev = []
-            rev.append(line.strip())
-            if clean_string:
-                orig_rev = clean_str(" ".join(rev))
-            else:
-                orig_rev = " ".join(rev).lower()
-            words = set(orig_rev.split())
-            for word in words:
-                vocab[word] += 1
-            datum  = {"y":0,
-                      "text": orig_rev,
-                      "num_words": len(orig_rev.split()),
-                      "split": np.random.randint(0,cv)}
+            datum = {"y": int(label),
+                     "text": orig_rev,
+                     "num_words": len(orig_rev.split()),
+                     "split": np.random.randint(0, cv)}
             revs.append(datum)
     return revs, vocab
+
 
 def get_W(word_vecs, k=300):
     """
     Get word matrix. W[i] is the vector for word indexed by i
+    : return W, word_idx_map
+    W is a numpy matrix.
+    word_idx_map is a dict. The key is the word and the value is the word index.
+    The index starts with 1.
     """
     vocab_size = len(word_vecs)
     word_idx_map = dict()
-    W = np.zeros(shape=(vocab_size+1, k))
+    W = np.zeros(shape=(vocab_size + 1, k))
     W[0] = np.zeros(k)
     i = 1
     for word in word_vecs:
@@ -66,9 +63,12 @@ def get_W(word_vecs, k=300):
         i += 1
     return W, word_idx_map
 
+
 def load_bin_vec(fname, vocab):
     """
-    Loads 300x1 word vecs from Google (Mikolov) word2vec
+    Loads 300x1 word vecs from Google (Mikolov) word2vec.
+    Ignore words not in vocab.
+    : return: a dict. The key is the word, and the value is the word vector of numpy array type.
     """
     word_vecs = {}
     with open(fname, "rb") as f:
@@ -85,10 +85,11 @@ def load_bin_vec(fname, vocab):
                 if ch != '\n':
                     word.append(ch)
             if word in vocab:
-               word_vecs[word] = np.fromstring(f.read(binary_len), dtype='float32')
+                word_vecs[word] = np.fromstring(f.read(binary_len), dtype='float32')
             else:
                 f.read(binary_len)
     return word_vecs
+
 
 def add_unknown_words(word_vecs, vocab, min_df=1, k=300):
     """
@@ -97,41 +98,53 @@ def add_unknown_words(word_vecs, vocab, min_df=1, k=300):
     """
     for word in vocab:
         if word not in word_vecs and vocab[word] >= min_df:
-            word_vecs[word] = np.random.uniform(-0.25,0.25,k)
+            word_vecs[word] = np.random.uniform(-0.25, 0.25, k)
+
 
 def clean_str(string, TREC=False):
     """
     Tokenization/string cleaning for all datasets except for SST.
     Every dataset is lower cased except for TREC
+
+    !!! do not use it
+    This function will convert all the Chinese sentents to null string.
+
     """
-    string = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", string)
-    string = re.sub(r"\'s", " \'s", string)
-    string = re.sub(r"\'ve", " \'ve", string)
-    string = re.sub(r"n\'t", " n\'t", string)
-    string = re.sub(r"\'re", " \'re", string)
-    string = re.sub(r"\'d", " \'d", string)
-    string = re.sub(r"\'ll", " \'ll", string)
-    string = re.sub(r",", " , ", string)
-    string = re.sub(r"!", " ! ", string)
-    string = re.sub(r"\(", " \( ", string)
-    string = re.sub(r"\)", " \) ", string)
-    string = re.sub(r"\?", " \? ", string)
-    string = re.sub(r"\s{2,}", " ", string)
+    print '##### Warning: Using clean_str'
+    # string = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", string)
+    # string = re.sub(r"\'s", " \'s", string)
+    # string = re.sub(r"\'ve", " \'ve", string)
+    # string = re.sub(r"n\'t", " n\'t", string)
+    # string = re.sub(r"\'re", " \'re", string)
+    # string = re.sub(r"\'d", " \'d", string)
+    # string = re.sub(r"\'ll", " \'ll", string)
+    # string = re.sub(r",", " , ", string)
+    # string = re.sub(r"!", " ! ", string)
+    # string = re.sub(r"\(", " \( ", string)
+    # string = re.sub(r"\)", " \) ", string)
+    # string = re.sub(r"\?", " \? ", string)
+    # string = re.sub(r"\s{2,}", " ", string)
     return string.strip() if TREC else string.strip().lower()
 
-def clean_str_sst(string):
-    """
-    Tokenization/string cleaning for the SST dataset
-    """
-    string = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", string)
-    string = re.sub(r"\s{2,}", " ", string)
-    return string.strip().lower()
 
-if __name__=="__main__":
+# def clean_str_sst(string):
+#     """
+#     Tokenization/string cleaning for the SST dataset
+#     """
+#     string = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", string)
+#     string = re.sub(r"\s{2,}", " ", string)
+#     return string.strip().lower()
+
+
+def main():
+    # word2vec dict
     w2v_file = sys.argv[1]
-    data_folder = ["label_advice_0130_0302.pos","label_advice_0130_0302.neg"]
+    # traning file
+    # two columns. The first one is label and the second one is sentences.
+    train_path = sys.argv[2]
     print "loading data...",
-    revs, vocab = build_data_cv(data_folder, cv=10, clean_string=True)
+    revs, vocab = build_data_cv(train_path, cv=10, clean_string=True)
+    # The max lenghth of all sentences.
     max_l = np.max(pd.DataFrame(revs)["num_words"])
     print "data loaded!"
     print "number of sentences: " + str(len(revs))
@@ -148,4 +161,8 @@ if __name__=="__main__":
     W2, _ = get_W(rand_vecs)
     cPickle.dump([revs, W, W2, word_idx_map, vocab], open("mr.p", "wb"))
     print "dataset created!"
+    return None
 
+
+if __name__ == '__main__':
+    main()

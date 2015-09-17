@@ -18,25 +18,15 @@ import warnings
 import sys
 warnings.filterwarnings("ignore")
 
-#different non-linearities
-def ReLU(x):
-    y = T.maximum(0.0, x)
-    return(y)
-def Sigmoid(x):
-    y = T.nnet.sigmoid(x)
-    return(y)
-def Tanh(x):
-    y = T.tanh(x)
-    return(y)
-def Iden(x):
-    y = x
-    return(y)
+from conv_net_classes import ReLU, Sigmoid, Tanh, Iden, \
+    HiddenLayer, DropoutHiddenLayer, MLP, MLPDropout, LogisticRegression, LeNetConvPoolLayer
+
 
 def train_conv_net(datasets,
                    U,
                    img_w=300,
-                   filter_hs=[3,4,5],
-                   hidden_units=[100,2],
+                   filter_hs=[3, 4, 5],
+                   hidden_units=[100, 2],
                    dropout_rate=[0.5],
                    shuffle_batch=True,
                    n_epochs=25,
@@ -56,29 +46,40 @@ def train_conv_net(datasets,
     lr_decay = adadelta decay parameter
     """
     rng = np.random.RandomState(3435)
-    img_h = len(datasets[0][0])-1
+    # len(datasets[0][0]) is the length of sentence (padded) plus one label.
+    # So it is necessary to minus one.
+    img_h = len(datasets[0][0]) - 1
     filter_w = img_w
     feature_maps = hidden_units[0]
     filter_shapes = []
     pool_sizes = []
     for filter_h in filter_hs:
         filter_shapes.append((feature_maps, 1, filter_h, filter_w))
-        pool_sizes.append((img_h-filter_h+1, img_w-filter_w+1))
-    parameters = [("image shape",img_h,img_w),("filter shape",filter_shapes), ("hidden_units",hidden_units),
-                  ("dropout", dropout_rate), ("batch_size",batch_size),("non_static", non_static),
-                    ("learn_decay",lr_decay), ("conv_non_linear", conv_non_linear), ("non_static", non_static)
-                    ,("sqr_norm_lim",sqr_norm_lim),("shuffle_batch",shuffle_batch)]
+        pool_sizes.append((img_h - filter_h + 1, img_w - filter_w + 1))
+    parameters = [("image shape", img_h, img_w),
+                  ("filter shape", filter_shapes),
+                  ("hidden_units", hidden_units),
+                  ("dropout", dropout_rate),
+                  ("batch_size", batch_size),
+                  ("non_static", non_static),
+                  ("learn_decay", lr_decay),
+                  ("conv_non_linear", conv_non_linear),
+                  ("non_static", non_static),
+                  ("sqr_norm_lim", sqr_norm_lim),
+                  ("shuffle_batch", shuffle_batch)]
     print parameters
 
-    #define model architecture
+    # define model architecture
     index = T.lscalar()
     x = T.matrix('x')
     y = T.ivector('y')
-    Words = theano.shared(value = U, name = "Words")
+    Words = theano.shared(value=U, name="Words")
     zero_vec_tensor = T.vector()
     zero_vec = np.zeros(img_w)
-    set_zero = theano.function([zero_vec_tensor], updates=[(Words, T.set_subtensor(Words[0,:], zero_vec_tensor))])
-    layer0_input = Words[T.cast(x.flatten(),dtype="int32")].reshape((x.shape[0],1,x.shape[1],Words.shape[1]))
+    set_zero = theano.function([zero_vec_tensor],
+                               updates=[(Words, T.set_subtensor(Words[0, :],
+                                        zero_vec_tensor))])
+    layer0_input = Words[T.cast(x.flatten(), dtype="int32")].reshape((x.shape[0], 1, x.shape[1], Words.shape[1]))
     conv_layers = []
     layer1_inputs = []
     for i in xrange(len(filter_hs)):
@@ -92,6 +93,8 @@ def train_conv_net(datasets,
     layer1_input = T.concatenate(layer1_inputs,1)
     hidden_units[0] = feature_maps*len(filter_hs)
     classifier = MLPDropout(rng, input=layer1_input, layer_sizes=hidden_units, activations=activations, dropout_rates=dropout_rate)
+    print classifier
+    return
 
     #define parameters of the model and update functions using adadelta
     params = classifier.params
@@ -246,9 +249,14 @@ def safe_update(dict_to, dict_from):
         dict_to[key] = val
     return dict_to
 
-def get_idx_from_sent(sent, word_idx_map, max_l=51, k=300, filter_h=5):
+
+def get_idx_from_sent(sent, word_idx_map, max_l=51, filter_h=5):
     """
     Transforms sentence into a list of indices. Pad with zeroes.
+
+    Insert pad = filter_h - 1 zeros in the begining of sentence.
+    Filling short sentence with zeros too.
+    The max length of the index list is max_l + 2 * pad.
     """
     x = []
     pad = filter_h - 1
@@ -256,68 +264,90 @@ def get_idx_from_sent(sent, word_idx_map, max_l=51, k=300, filter_h=5):
         x.append(0)
     words = sent.split()
     for word in words:
-        if word in word_idx_map:
+        try:
             x.append(word_idx_map[word])
-    while len(x) < max_l+2*pad:
-        x.append(0)
-    return x
+        except KeyError:
+            pass
+    max_sent_idx_len = max_l + 2 * pad
+    if len(x) > max_sent_idx_len:
+        return x[:max_sent_idx_len]
+    elif len(x) < max_sent_idx_len:
+        return x + [0 for _ in range(max_sent_idx_len - len(x))]
+    else:
+        return x
+
 
 def make_idx_data_cv(revs, word_idx_map, cv, max_l=51, k=300, filter_h=5):
     """
     Transforms sentences into a 2-d matrix.
+
+    The matrix width is max_l + 2 * (filter_h - 1) + 1.
+    The last columns of the matrix is the label
     """
     train, test = [], []
     for rev in revs:
-        sent = get_idx_from_sent(rev["text"], word_idx_map, max_l, k, filter_h)
+        sent = get_idx_from_sent(rev["text"], word_idx_map, max_l, filter_h)
+        # Append the label
         sent.append(rev["y"])
-        if rev["split"]==cv:
+        if rev["split"] == cv:
             test.append(sent)
         else:
             train.append(sent)
-    train = np.array(train,dtype="int")
-    test = np.array(test,dtype="int")
-    return [train, test]
+    train = np.array(train, dtype="int")
+    test = np.array(test, dtype="int")
+    return train, test
 
 
-if __name__=="__main__":
+def main():
+    # python conv_net_sentence.py mode word_vectors
+    mode = sys.argv[1]
+    word_vectors = sys.argv[2]
     print "loading data...",
-    x = cPickle.load(open("mr.p","rb"))
+    x = cPickle.load(open("mr.p", "rb"))
     revs, W, W2, word_idx_map, vocab = x[0], x[1], x[2], x[3], x[4]
     print "data loaded!"
-    mode= sys.argv[1]
-    word_vectors = sys.argv[2]
-    if mode=="-nonstatic":
+
+    if mode == "-nonstatic":
         print "model architecture: CNN-non-static"
-        non_static=True
-    elif mode=="-static":
+        non_static = True
+    elif mode == "-static":
         print "model architecture: CNN-static"
-        non_static=False
-    execfile("conv_net_classes.py")
-    if word_vectors=="-rand":
+        non_static = False
+    else:
+        raise ValueError('invalid parameter mode')
+    if word_vectors == "-rand":
         print "using: random vectors"
         U = W2
-    elif word_vectors=="-word2vec":
+    elif word_vectors == "-word2vec":
         print "using: word2vec vectors"
         U = W
+    else:
+        raise ValueError('invalid parameter word_vectors')
     sys.stdout.flush()
     results = []
-    r = range(0,10)
-    # for i in r:
-    i = 1
-    datasets = make_idx_data_cv(revs, word_idx_map, i, max_l=56,k=300, filter_h=5)
-    perf = train_conv_net(datasets,
-                          U,
-                          lr_decay=0.95,
-                          filter_hs=[3,4,5],
-                          conv_non_linear="relu",
-                          hidden_units=[100,2],
-                          shuffle_batch=True,
-                          n_epochs=25,
-                          sqr_norm_lim=9,
-                          non_static=non_static,
-                          batch_size=50,
-                          dropout_rate=[0.5])
-    print "cv: " + str(i) + ", perf: " + str(perf)
-    results.append(perf)
+    # This is the cross validation with 10 times experiments.
+    # loop for only one times for tme consideration.
+    for i in range(0, 1):
+        datasets = make_idx_data_cv(revs, word_idx_map, i, max_l=56, k=300, filter_h=5)
+        perf = train_conv_net(datasets,
+                              U,
+                              img_w=300,
+                              lr_decay=0.95,
+                              filter_hs=[3, 4, 5],
+                              conv_non_linear="relu",
+                              hidden_units=[100, 2],
+                              shuffle_batch=True,
+                              n_epochs=25,
+                              sqr_norm_lim=9,
+                              non_static=non_static,
+                              batch_size=50,
+                              dropout_rate=[0.5])
+        print "cv: " + str(i) + ", perf: " + str(perf)
+        results.append(perf)
     print str(np.mean(results))
     sys.stdout.flush()
+    return None
+
+
+if __name__ == '__main__':
+    main()
