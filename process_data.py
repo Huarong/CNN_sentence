@@ -10,6 +10,10 @@ import re
 
 import numpy as np
 import pandas as pd
+import theano
+
+# for gpu purpose
+theano.config.floatX = 'float32'
 
 
 def build_data_cv(train_path, cv=10, clean_string=False):
@@ -54,8 +58,8 @@ def get_W(word_vecs, k=300):
     """
     vocab_size = len(word_vecs)
     word_idx_map = dict()
-    W = np.zeros(shape=(vocab_size + 1, k))
-    W[0] = np.zeros(k)
+    W = np.zeros(shape=(vocab_size + 1, k), dtype=theano.config.floatX)
+    W[0] = np.zeros(k, dtype=theano.config.floatX)
     i = 1
     for word in word_vecs:
         W[i] = word_vecs[word]
@@ -138,12 +142,14 @@ def clean_str(string, TREC=False):
 
 def main():
     # word2vec dict
-    w2v_file = sys.argv[1]
+    # w2v_file = sys.argv[1]
     # traning file
     # two columns. The first one is label and the second one is sentences.
-    train_path = sys.argv[2]
+    # train_path = sys.argv[2]
+    w2v_file = 'data/muying_answer.seg.utf8.bin'
+    train_path = 'data/train500'
     print "loading data...",
-    revs, vocab = build_data_cv(train_path, cv=10, clean_string=True)
+    revs, vocab = build_data_cv(train_path, cv=10, clean_string=False)
     # The max lenghth of all sentences.
     max_l = np.max(pd.DataFrame(revs)["num_words"])
     print "data loaded!"

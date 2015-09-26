@@ -140,6 +140,7 @@ class MLPDropout(object):
             W=dropout_output_layer.W * (1 - dropout_rates[-1]),
             b=dropout_output_layer.b,
             n_in=n_in, n_out=n_out)
+        self.output_layer = output_layer
         self.layers.append(output_layer)
 
         # Use the negative log likelihood of the logistic regression layer as

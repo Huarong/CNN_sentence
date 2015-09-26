@@ -31,7 +31,7 @@ def train_conv_net(datasets,
                    shuffle_batch=True,
                    n_epochs=25,
                    batch_size=50,
-                   lr_decay = 0.95,
+                   lr_decay=0.95,
                    conv_non_linear="relu",
                    activations=[Iden],
                    sqr_norm_lim=9,
@@ -74,27 +74,36 @@ def train_conv_net(datasets,
     x = T.matrix('x')
     y = T.ivector('y')
     Words = theano.shared(value=U, name="Words")
+    layer0_input = Words[T.cast(x.flatten(), dtype="int32")].reshape((x.shape[0], 1, x.shape[1], Words.shape[1]))
+
+
     zero_vec_tensor = T.vector()
-    zero_vec = np.zeros(img_w)
     set_zero = theano.function([zero_vec_tensor],
                                updates=[(Words, T.set_subtensor(Words[0, :],
                                         zero_vec_tensor))])
-    layer0_input = Words[T.cast(x.flatten(), dtype="int32")].reshape((x.shape[0], 1, x.shape[1], Words.shape[1]))
+    zero_vec = np.zeros(img_w)
+
     conv_layers = []
     layer1_inputs = []
     for i in xrange(len(filter_hs)):
         filter_shape = filter_shapes[i]
         pool_size = pool_sizes[i]
-        conv_layer = LeNetConvPoolLayer(rng, input=layer0_input,image_shape=(batch_size, 1, img_h, img_w),
-                                filter_shape=filter_shape, poolsize=pool_size, non_linear=conv_non_linear)
+        conv_layer = LeNetConvPoolLayer(rng,
+                                        input=layer0_input,
+                                        image_shape=(batch_size, 1, img_h, img_w),
+                                        filter_shape=filter_shape,
+                                        poolsize=pool_size,
+                                        non_linear=conv_non_linear)
         layer1_input = conv_layer.output.flatten(2)
         conv_layers.append(conv_layer)
         layer1_inputs.append(layer1_input)
-    layer1_input = T.concatenate(layer1_inputs,1)
-    hidden_units[0] = feature_maps*len(filter_hs)
-    classifier = MLPDropout(rng, input=layer1_input, layer_sizes=hidden_units, activations=activations, dropout_rates=dropout_rate)
-    print classifier
-    return
+    layer1_input = T.concatenate(layer1_inputs, 1)
+    hidden_units[0] = feature_maps * len(filter_hs)
+    classifier = MLPDropout(rng,
+                            input=layer1_input,
+                            layer_sizes=hidden_units,
+                            activations=activations,
+                            dropout_rates=dropout_rate)
 
     #define parameters of the model and update functions using adadelta
     params = classifier.params
@@ -114,19 +123,19 @@ def train_conv_net(datasets,
         extra_data_num = batch_size - datasets[0].shape[0] % batch_size
         train_set = np.random.permutation(datasets[0])
         extra_data = train_set[:extra_data_num]
-        new_data=np.append(datasets[0],extra_data,axis=0)
+        new_data = np.append(datasets[0], extra_data, axis=0)
     else:
         new_data = datasets[0]
     new_data = np.random.permutation(new_data)
-    n_batches = new_data.shape[0]/batch_size
+    n_batches = new_data.shape[0] / batch_size
     n_train_batches = int(np.round(n_batches*0.9))
-    #divide train set into train/val sets
-    test_set_x = datasets[1][:,:img_h]
-    test_set_y = np.asarray(datasets[1][:,-1],"int32")
-    train_set = new_data[:n_train_batches*batch_size,:]
-    val_set = new_data[n_train_batches*batch_size:,:]
-    train_set_x, train_set_y = shared_dataset((train_set[:,:img_h],train_set[:,-1]))
-    val_set_x, val_set_y = shared_dataset((val_set[:,:img_h],val_set[:,-1]))
+    # divide train set into train/val sets
+    test_set_x = datasets[1][:, :img_h]
+    test_set_y = np.asarray(datasets[1][:, -1], "int32")
+    train_set = new_data[:n_train_batches*batch_size, :]
+    val_set = new_data[n_train_batches*batch_size:, :]
+    train_set_x, train_set_y = shared_dataset((train_set[:, :img_h], train_set[:, -1]))
+    val_set_x, val_set_y = shared_dataset((val_set[:, :img_h], val_set[:, -1]))
     n_val_batches = n_batches - n_train_batches
     val_model = theano.function([index], classifier.errors(y),
          givens={
@@ -300,8 +309,10 @@ def make_idx_data_cv(revs, word_idx_map, cv, max_l=51, k=300, filter_h=5):
 
 def main():
     # python conv_net_sentence.py mode word_vectors
-    mode = sys.argv[1]
-    word_vectors = sys.argv[2]
+    # mode = sys.argv[1]
+    # word_vectors = sys.argv[2]
+    mode = '-static'
+    word_vectors = '-word2vec'
     print "loading data...",
     x = cPickle.load(open("mr.p", "rb"))
     revs, W, W2, word_idx_map, vocab = x[0], x[1], x[2], x[3], x[4]
