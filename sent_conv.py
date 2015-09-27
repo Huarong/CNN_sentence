@@ -133,6 +133,8 @@ class SentConv(object):
         # Can be assigned at the fit step.
         self.batch_size = None
 
+        self.epoch = 0
+
         self.Words = theano.shared(value=wordvec, name="Words")
         X = T.matrix('X')
         Y = T.ivector('Y')
@@ -303,14 +305,14 @@ class SentConv(object):
         test_score = 0.
         start_time = timeit.default_timer()
 
-        epoch = 0
         done_looping = False
         last_cost = np.inf
         lean_rate = self.learning_rate
         sys.stdout.flush()
-
+        logger.info('already traned number of epochs: %s' % self.epoch)
+        epoch = self.epoch
         while (epoch < n_epochs) and (not done_looping):
-            epoch = epoch + 1
+            epoch += 1
             avg_cost_list = []
             for minibatch_index in xrange(n_train_batches):
 
@@ -332,9 +334,9 @@ class SentConv(object):
                     # validation_losses = [validate_model(i) for i
                     #                      in xrange(n_valid_batches)]
                     # this_validation_loss = np.mean(validation_losses)
-                    train_all_precison, train_label_precision, train_label_recall = \
-                        self.test(train_x, train_y.eval())
-                    this_train_loss = 1 - train_all_precison
+                    # train_all_precison, train_label_precision, train_label_recall = \
+                    #     self.test(train_x, train_y.eval())
+                    # this_train_loss = 1 - train_all_precison
 
                     valid_all_precison, valid_label_precision, valid_label_recall = \
                         self.test(valid_x, valid_y.eval())
@@ -347,15 +349,15 @@ class SentConv(object):
 
 
                     logger.info(
-                        'epoch %i, learning rate: %f, avg_cost: %f, train P: %f %%, valid P: %f %%, train_1_P: %s, train_1_R: %s, valid_1_P: %s, valid_1_R: %s' %
+                        'epoch %i, learning rate: %f, avg_cost: %f, valid P: %f %%, valid_1_P: %s, valid_1_R: %s' %
                         (
                             epoch,
                             lean_rate,
                             avg_cost,
-                            (1 - this_train_loss) * 100,
+                            # (1 - this_train_loss) * 100,
                             (1 - this_validation_loss) * 100.,
-                            train_label_precision[1],
-                            train_label_recall[1],
+                            # train_label_precision[1],
+                            # train_label_recall[1],
                             valid_label_precision[1],
                             valid_label_recall[1]
                         )
@@ -378,6 +380,7 @@ class SentConv(object):
                 if patience <= iter:
                     done_looping = True
                     break
+                self.epoch = epoch
 
         end_time = timeit.default_timer()
         logger.info(('Optimization complete. Best validation score of %f %% '
@@ -454,7 +457,6 @@ def main():
     conf = Config(conf_path)
     global logger
     logger = init_log(__file__, conf.log_path)
-    conf.log(logger)
     mode = '-static'
     word_vectors = '-word2vec'
     logger.info("loading data...")
@@ -481,9 +483,14 @@ def main():
         U = W
     sys.stdout.flush()
     results = []
-    # cross validation
     datasets = make_idx_data_cv(revs, word_idx_map, conf.cv_index, max_l=15, k=300)
-    sc = SentConv(filter_hs=conf.filter_hs, filter_num=conf.filter_num, n_hidden=conf.filter_num, n_out=2, word_idx_map=word_idx_map, wordvec=U, adjust_input=False)
+    if os.path.exists(conf.model_path):
+        sc = SentConv.load(conf.model_path)
+        logger.info('Load existing model from %s' % conf.model_path)
+    else:
+        conf.log(logger)
+        sc = SentConv(filter_hs=conf.filter_hs, filter_num=conf.filter_num, n_hidden=conf.filter_num, n_out=2, word_idx_map=word_idx_map, wordvec=U, adjust_input=False)
+        logger.info('Initiate a model')
     try:
         sc.fit(datasets, batch_size=conf.batch_size, n_epochs=conf.n_epochs)
     except KeyboardInterrupt:
