@@ -147,7 +147,7 @@ def main():
     # two columns. The first one is label and the second one is sentences.
     # train_path = sys.argv[2]
     w2v_file = 'data/muying_answer.seg.utf8.bin'
-    train_path = 'data/train500'
+    train_path = 'data/train2.seg2'
     print "loading data...",
     revs, vocab = build_data_cv(train_path, cv=10, clean_string=False)
     # The max lenghth of all sentences.

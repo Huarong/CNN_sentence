@@ -1,3 +1,4 @@
 mr.p
 *.out
 *.pyc
+.DS_Store

@@ -12,7 +12,6 @@ import codecs
 import logging
 import sys
 import timeit
-import ipdb
 
 import util
 from util import sigmoid, make_idx_data_cv, evaluate, get_idx_from_sent, ConfigBase, init_log
@@ -334,11 +333,11 @@ class SentConv(object):
                     #                      in xrange(n_valid_batches)]
                     # this_validation_loss = np.mean(validation_losses)
                     train_all_precison, train_label_precision, train_label_recall = \
-                        self.test(train_x, train_y.owner.inputs[0].get_value(borrow=True))
+                        self.test(train_x, train_y.eval())
                     this_train_loss = 1 - train_all_precison
 
                     valid_all_precison, valid_label_precision, valid_label_recall = \
-                        self.test(valid_x, valid_y.owner.inputs[0].get_value(borrow=True))
+                        self.test(valid_x, valid_y.eval())
                     this_validation_loss = 1 - valid_all_precison
 
                     avg_cost = np.mean(avg_cost_list)
