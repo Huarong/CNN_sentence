@@ -26,8 +26,10 @@ theano.config.on_unused_input = 'ignore'
 class Config(ConfigBase):
     def __init__(self, conf_path):
         super(Config, self).__init__(conf_path)
+        self.do_train = 0
         self.train_path = ''
         self.cv_index = 0
+        self.do_test = 0
         self.test_path = ''
         self.test_out_path = ''
         self.batch_size = 50
@@ -234,7 +236,7 @@ class SentConv(object):
         index = T.lscalar()  # index to a [mini]batch
         X = self.X
         Y = self.Y
-        lean_rate = T.scalar('Learning Rate')
+        self.learn_rate = T.scalar('Learning Rate')
 
         # compute the gradient of cost with respect to theta (sotred in params)
         # the resulting gradients will be stored in a list gparams
@@ -248,7 +250,7 @@ class SentConv(object):
         # element is a pair formed from the two lists :
         #    C = [(a1, b1), (a2, b2), (a3, b3), (a4, b4)]
         updates = [
-            (param, param - lean_rate * gparam)
+            (param, param - self.learn_rate * gparam)
             for param, gparam in zip(self.params, gparams)
         ]
 
@@ -256,7 +258,7 @@ class SentConv(object):
         # in the same time updates the parameter of the model based on the rules
         # defined in `updates`
         train_model = theano.function(
-            inputs=[index, lean_rate],
+            inputs=[index, self.learn_rate],
             outputs=self.cost,
             updates=updates,
             givens={
@@ -307,7 +309,6 @@ class SentConv(object):
 
         done_looping = False
         last_cost = np.inf
-        lean_rate = self.learning_rate
         sys.stdout.flush()
         logger.info('already traned number of epochs: %s' % self.epoch)
         epoch = self.epoch
@@ -316,7 +317,7 @@ class SentConv(object):
             avg_cost_list = []
             for minibatch_index in xrange(n_train_batches):
 
-                minibatch_avg_cost = train_model(minibatch_index, lean_rate)
+                minibatch_avg_cost = train_model(minibatch_index, self.learn_rate)
                 avg_cost_list.append(minibatch_avg_cost)
                 # print self.lr_layer.W.get_value()
                 # iteration number
@@ -344,7 +345,7 @@ class SentConv(object):
 
                     avg_cost = np.mean(avg_cost_list)
                     if avg_cost >= last_cost:
-                        lean_rate *= 0.95
+                        self.learn_rate *= 0.95
                     last_cost = avg_cost
 
 
@@ -352,7 +353,7 @@ class SentConv(object):
                         'epoch %i, learning rate: %f, avg_cost: %f, valid P: %f %%, valid_1_P: %s, valid_1_R: %s' %
                         (
                             epoch,
-                            lean_rate,
+                            self.learn_rate,
                             avg_cost,
                             # (1 - this_train_loss) * 100,
                             (1 - this_validation_loss) * 100.,
@@ -491,18 +492,24 @@ def main():
         conf.log(logger)
         sc = SentConv(filter_hs=conf.filter_hs, filter_num=conf.filter_num, n_hidden=conf.filter_num, n_out=2, word_idx_map=word_idx_map, wordvec=U, adjust_input=False)
         logger.info('Initiate a model')
-    try:
-        sc.fit(datasets, batch_size=conf.batch_size, n_epochs=conf.n_epochs)
-    except KeyboardInterrupt:
-        logger.warning('Got control C. Quit.')
-        return
-    finally:
-        sc.save(conf.model_path)
-    # sc = SentConv.load(conf.model_path)
-    test_result = sc.test_from_file(conf.test_path, encoding='gb18030', out_path=conf.test_out_path)
-    logger.info('test result of %s' % conf.test_path)
-    logger.info(test_result)
-    logger.info('test out path is %s' % conf.test_out_path)
+    if conf.do_train:
+        try:
+            sc.fit(datasets, batch_size=conf.batch_size, n_epochs=conf.n_epochs)
+        except KeyboardInterrupt:
+            logger.warning('Got control C. Quit.')
+            return
+        finally:
+            sc.save(conf.model_path)
+    else:
+        logger.info('config says do not execute train process')
+    if conf.do_test:
+        test_result = sc.test_from_file(conf.test_path, encoding='gb18030', out_path=conf.test_out_path)
+        logger.info('test result of %s' % conf.test_path)
+        logger.info(test_result)
+        logger.info('test out path is %s' % conf.test_out_path)
+    else:
+        logger.info('config says do not execute test process')
+    return None
 
 
 if __name__ == '__main__':
