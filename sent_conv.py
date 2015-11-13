@@ -26,6 +26,8 @@ theano.config.on_unused_input = 'ignore'
 class Config(ConfigBase):
     def __init__(self, conf_path):
         super(Config, self).__init__(conf_path)
+        self.word_vectors = 'word2vec'
+        self.adjust_input = 0
         self.do_train = 0
         self.train_path = ''
         self.cv_index = 0
@@ -236,7 +238,7 @@ class SentConv(object):
         index = T.lscalar()  # index to a [mini]batch
         X = self.X
         Y = self.Y
-        self.learn_rate = T.scalar('Learning Rate')
+        learn_rate = T.scalar('Learning Rate')
 
         # compute the gradient of cost with respect to theta (sotred in params)
         # the resulting gradients will be stored in a list gparams
@@ -250,7 +252,7 @@ class SentConv(object):
         # element is a pair formed from the two lists :
         #    C = [(a1, b1), (a2, b2), (a3, b3), (a4, b4)]
         updates = [
-            (param, param - self.learn_rate * gparam)
+            (param, param - learn_rate * gparam)
             for param, gparam in zip(self.params, gparams)
         ]
 
@@ -258,7 +260,7 @@ class SentConv(object):
         # in the same time updates the parameter of the model based on the rules
         # defined in `updates`
         train_model = theano.function(
-            inputs=[index, self.learn_rate],
+            inputs=[index, learn_rate],
             outputs=self.cost,
             updates=updates,
             givens={
@@ -317,7 +319,7 @@ class SentConv(object):
             avg_cost_list = []
             for minibatch_index in xrange(n_train_batches):
 
-                minibatch_avg_cost = train_model(minibatch_index, self.learn_rate)
+                minibatch_avg_cost = train_model(minibatch_index, self.learning_rate)
                 avg_cost_list.append(minibatch_avg_cost)
                 # print self.lr_layer.W.get_value()
                 # iteration number
@@ -345,7 +347,7 @@ class SentConv(object):
 
                     avg_cost = np.mean(avg_cost_list)
                     if avg_cost >= last_cost:
-                        self.learn_rate *= 0.95
+                        self.learning_rate *= 0.95
                     last_cost = avg_cost
 
 
@@ -353,7 +355,7 @@ class SentConv(object):
                         'epoch %i, learning rate: %f, avg_cost: %f, valid P: %f %%, valid_1_P: %s, valid_1_R: %s' %
                         (
                             epoch,
-                            self.learn_rate,
+                            self.learning_rate,
                             avg_cost,
                             # (1 - this_train_loss) * 100,
                             (1 - this_validation_loss) * 100.,
@@ -452,34 +454,28 @@ class SentConv(object):
 
 
 def main():
-    # mode = sys.argv[1]
-    # word_vectors = sys.argv[2]
     conf_path = sys.argv[1]
     conf = Config(conf_path)
     global logger
     logger = init_log(__file__, conf.log_path)
-    mode = '-static'
-    word_vectors = '-word2vec'
+    word_vectors = conf.word_vectors
+    adjust_input = True if conf.adjust_input else False
     logger.info("loading data...")
-    if mode not in ('-nonstatic', '-static'):
-        raise ValueError('invalid parameter mode %s' % mode)
-    if word_vectors not in ('-rand', '-word2vec'):
+    if word_vectors not in ('rand', 'word2vec'):
         raise ValueError('invalid parameter word_vectors %s' % word_vectors)
 
     with open(conf.train_path, 'rb') as f:
         x = pickle.load(f)
     revs, W, W2, word_idx_map, vocab = x[0], x[1], x[2], x[3], x[4]
     logger.info("data loaded!")
-    if mode == "-nonstatic":
+    if adjust_input:
         print "model architecture: CNN-non-static"
-        non_static = True
-    elif mode == "-static":
+    else:
         print "model architecture: CNN-static"
-        non_static = False
-    if word_vectors == "-rand":
+    if word_vectors == "rand":
         print "using: random vectors"
         U = W2
-    elif word_vectors == "-word2vec":
+    elif word_vectors == "word2vec":
         print "using: word2vec vectors"
         U = W
     sys.stdout.flush()
@@ -490,7 +486,7 @@ def main():
         logger.info('Load existing model from %s' % conf.model_path)
     else:
         conf.log(logger)
-        sc = SentConv(filter_hs=conf.filter_hs, filter_num=conf.filter_num, n_hidden=conf.filter_num, n_out=2, word_idx_map=word_idx_map, wordvec=U, adjust_input=False)
+        sc = SentConv(filter_hs=conf.filter_hs, filter_num=conf.filter_num, n_hidden=conf.filter_num, n_out=2, word_idx_map=word_idx_map, wordvec=U, adjust_input=adjust_input)
         logger.info('Initiate a model')
     if conf.do_train:
         try:
